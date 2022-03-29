@@ -177,7 +177,7 @@ namespace easylightlevels
                                     BlockPos bPos = new BlockPos(x, y, z);
 
                                     posList.Add(bPos);
-                                    colorList.Add(GetColor(bPos));
+                                    colorList.Add(GetColor(bPos.UpCopy()));
 
                                 }
                             }
