@@ -18,7 +18,7 @@ namespace easylightlevels
 
             if (!ShouldLoad(api.Side)) return;
 
-            base.Start(api);
+//            base.Start(api);
 
             this.api = api;
 
