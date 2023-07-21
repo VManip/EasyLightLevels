@@ -18,13 +18,36 @@ namespace easylightlevels
 
             if (!ShouldLoad(api.Side)) return;
 
-//            base.Start(api);
-
             this.api = api;
 
             UpdateConfig();
 
-            api.RegisterCommand("lightlvl", "See light levels.", ".lightlvl", new ClientChatCommandDelegate((id, args) => Command(args)));
+            api.ChatCommands.Create("lightlvl")
+                .WithDescription("See light levels.")
+                .WithAlias("lightlevel")
+                .HandleWith(Command)
+
+                .BeginSubCommand("help")
+                    .WithAlias("h")
+                    .HandleWith(HelpCommand)
+                .EndSubCommand()
+
+                .BeginSubCommand("abort")
+                    .WithAlias("a")
+                    .HandleWith(AbortCommand)
+                .EndSubCommand()
+
+                .BeginSubCommand("update")
+                    .WithAlias("u")
+                    .HandleWith(UpdateCommand)
+                .EndSubCommand()
+
+                .BeginSubCommand("radius")
+                    .WithAlias("r")
+                    .WithArgs(api.ChatCommands.Parsers.OptionalInt("radius", -1))
+                    .HandleWith(x => RadiusCommand(x))
+                .EndSubCommand();
+
         }
 
         Thread opThread;
@@ -56,56 +79,50 @@ namespace easylightlevels
             api.StoreModConfig(config, configFilename);
 		}
 
-        private void Command(CmdArgs args)
-		{
+        private TextCommandResult HelpCommand(TextCommandCallingArgs args)
+        {
+            api.ShowChatMessage("ELL command help:");
+            api.ShowChatMessage("Use '.lightlvl' to toggle light levels on and off.");
+            api.ShowChatMessage("Use '.lightlvl update' to update the configuration file and load new changes to it into the game.");
+            api.ShowChatMessage("Use '.lightlvl radius' to show or set the radius.");
+            api.ShowChatMessage("If the light levels won't update or go away, try '.lightlvl abort'.");
+            return TextCommandResult.Success(null);
+        }
 
-            string arg = args.PopWord();
-
-            if (arg == null)
-			{
+        private TextCommandResult AbortCommand(TextCommandCallingArgs args)
+        {
+            if (isOn)
+            {
                 ToggleRun();
-                return;
-			}
-
-            arg = arg.ToLowerInvariant();
-
-            if (arg == "h" || arg == "help")
-			{
-                api.ShowChatMessage("ELL command help:");
-                api.ShowChatMessage("Use '.lightlvl' to toggle light levels on and off.");
-                api.ShowChatMessage("Use '.lightlvl update' to update the configuration file and load new changes to it into the game.");
-                api.ShowChatMessage("Use '.lightlvl radius' to show or set the radius.");
-                api.ShowChatMessage("If the light levels won't update or go away, try '.lightlvl abort'.");
-			}
-            else if (arg == "abort" || arg == "a")
-			{
-                if (isOn)
-				{
-                    ToggleRun();
-                    if (opThread.IsAlive) opThread.Abort();
-                    api.World.HighlightBlocks(api.World.Player, 5229, new List<BlockPos>());
-                }
-			}
-            else if (arg == "update" || arg == "u") UpdateConfig();
-
-            else if (arg == "r" || arg == "rad" || arg == "radius")
-			{
-                if (args.PeekWord() == null)
-				{
-                    api.ShowChatMessage("Current Radius: " + config.Radius.Value.ToString());
-                    return;
-				}
-
-                int? rad = args.PopInt();
-                if (rad == null) api.ShowChatMessage(rad + " is not a valid radius. It must be a number.");
-                else
-                {
-                    config.Radius.Value = (int)rad;
-                    api.StoreModConfig(config, configFilename);
-                    api.ShowChatMessage("Current Radius: " + config.Radius.Value.ToString());
-                }
+                if (opThread.IsAlive) opThread.Abort();
+                api.World.HighlightBlocks(api.World.Player, 5229, new List<BlockPos>());
             }
-            else api.ShowChatMessage("ELL command '" + arg + "' unknown.");
+            return TextCommandResult.Success("Aborted ELL.");
+        }
+
+        private TextCommandResult UpdateCommand(TextCommandCallingArgs args)
+        {
+            UpdateConfig();
+            return TextCommandResult.Success("Updated ELL configuration from file.");
+        }
+
+        private TextCommandResult RadiusCommand(TextCommandCallingArgs args)
+        {
+            int rad = (int)args[0];
+            if (rad == -1) return TextCommandResult.Success("Current Radius: " + config.Radius.Value.ToString());
+            else if (rad < 1) return TextCommandResult.Error(rad + " is not a valid radius. It must be a number greater than 0.");
+            else
+            {
+                config.Radius.Value = rad;
+                api.StoreModConfig(config, configFilename);
+                return TextCommandResult.Success("Radius Saved as " + config.Radius.Value.ToString() + ".");
+            }
+        }
+
+        private TextCommandResult Command(TextCommandCallingArgs callArgs)
+		{
+            ToggleRun();
+            return TextCommandResult.Success(null);
 		}
 
         private void ToggleRun()
