@@ -1,4 +1,4 @@
-﻿namespace easylightlevels
+﻿namespace EasyLightLevels.Config
 {
     public class EllConfig
     {
@@ -13,7 +13,7 @@
             "True = enabled, False = disabled. Default = False."
         );
 
-        public readonly ConfigItem<int> Radius = new ConfigItem<int>(15,
+        public readonly ConfigItem<int> Radius = new ConfigItem<int>(32,
             "Radius of the shown light levels in blocks, not including your own position. " +
             "At high values, FPS is not impacted, but the light levels will not be updated smoothly."
         );

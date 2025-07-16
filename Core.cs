@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using EasyLightLevels.Config;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace easylightlevels
+namespace EasyLightLevels
 {
     internal class EllCoreSystem : ModSystem
     {
@@ -100,12 +101,11 @@ namespace easylightlevels
 
         private TextCommandResult AbortCommand(TextCommandCallingArgs args)
         {
-            if (_isOn)
-            {
-                ToggleRun();
-                if (_opThread.IsAlive) _opThread.Abort();
-                _api.World.HighlightBlocks(_api.World.Player, 5229, new List<BlockPos>());
-            }
+            if (!_isOn) return TextCommandResult.Success("Aborted ELL.");
+
+            ToggleRun();
+            if (_opThread.IsAlive) _opThread.Abort();
+            _api.World.HighlightBlocks(_api.World.Player, 5229, new List<BlockPos>());
 
             return TextCommandResult.Success("Aborted ELL.");
         }
@@ -233,8 +233,9 @@ namespace easylightlevels
                     Thread.ResetAbort();
                     break;
                 }
-                catch
+                catch (Exception)
                 {
+                    //this is running a lot, so instead of errors stopping the game let's just cut our losses and do it later. worst case it won't update
                 }
             }
 
@@ -256,7 +257,6 @@ namespace easylightlevels
 
             if (blockLightType < 8 && sunLightType >= 8)
                 //cyan(colourAid) or yellow
-
                 return isColourAid ? ColorUtil.ToRgba(32, 255, 255, 0) : ColorUtil.ToRgba(32, 0, 255, 255);
 
             if (blockLightType < 8 && sunLightType < 8)

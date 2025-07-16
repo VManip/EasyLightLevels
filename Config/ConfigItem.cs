@@ -1,4 +1,4 @@
-﻿namespace easylightlevels
+﻿namespace EasyLightLevels.Config
 {
     public class ConfigItem<T>
     {

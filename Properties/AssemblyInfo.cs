@@ -38,6 +38,6 @@ using Vintagestory.API.Common;
     Side = "Client",
     Version = "1.0.4",
     Description = "Adds a simple light level viewer to the game. Run .lightlvl in chat to toggle it.",
-    Authors = new[] { "Stinky Lizard", "vmanip" })]
+    Authors = new[] { "Stinky Lizard", "VManip" })]
 
 [assembly: ModDependency("game")]
