@@ -177,7 +177,6 @@ namespace easylightlevels
 
         private void Run()
         {
-            // Preallocate lists once and reuse inside the loop to reduce GC pressure
             var posList = new List<BlockPos>();
             var colorList = new List<int>();
 
@@ -190,11 +189,9 @@ namespace easylightlevels
                     var player = _api.World.Player;
                     var pPos = player.Entity.Pos.AsBlockPos;
 
-                    // Clear lists instead of re-instantiating
                     posList.Clear();
                     colorList.Clear();
 
-                    // Cache bounds to avoid recalculating inside loops
                     var minX = pPos.X - rad;
                     var maxX = pPos.X + rad;
                     var minY = pPos.Y - rad;
@@ -238,12 +235,9 @@ namespace easylightlevels
                 }
                 catch (Exception ex)
                 {
-                    // Ideally log the exception somewhere to diagnose issues
-                    // e.g. _api.Logger.Error("Exception in Run loop", ex);
                 }
             }
 
-            // Clear highlights on exit
             _api.Event.EnqueueMainThreadTask(
                 () => _api.World.HighlightBlocks(_api.World.Player, 5229, new List<BlockPos>()),
                 "EasyLightLevels");
@@ -262,7 +256,6 @@ namespace easylightlevels
 
             if (blockLightType < 8 && sunLightType >= 8)
                 //cyan(colourAid) or yellow
-
                 return isColourAid ? ColorUtil.ToRgba(32, 255, 255, 0) : ColorUtil.ToRgba(32, 0, 255, 255);
 
             if (blockLightType < 8 && sunLightType < 8)
