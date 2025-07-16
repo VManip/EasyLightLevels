@@ -63,8 +63,9 @@
         </Reference>
     </ItemGroup>
     <ItemGroup>
-        <Compile Include="Config\ConfigItem.cs" />
-        <Compile Include="Config\EllConfig.cs" />
+        <Compile Include="BlockPainter.cs"/>
+        <Compile Include="Config\ConfigItem.cs"/>
+        <Compile Include="Config\EllConfig.cs"/>
         <Compile Include="Properties\AssemblyInfo.cs"/>
         <Compile Include="Core.cs"/>
     </ItemGroup>

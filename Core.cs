@@ -14,9 +14,8 @@ namespace EasyLightLevels
         private ICoreClientAPI _api;
 
         private EllConfig _config;
-        private bool _isOn;
-
-        private Thread _opThread;
+        
+        private BlockPainter _painter;
 
         public override bool ShouldLoad(EnumAppSide side)
         {
@@ -31,10 +30,12 @@ namespace EasyLightLevels
 
             UpdateConfig();
 
+            _painter = new BlockPainter(_api, _config);
+
             api.ChatCommands.Create("lightlvl")
                 .WithDescription("See light levels.")
                 .WithAlias("lightlevel")
-                .HandleWith(Command)
+                .HandleWith(ToggleCommand)
                 .BeginSubCommand("help")
                 .WithAlias("h")
                 .HandleWith(HelpCommand)
@@ -66,7 +67,7 @@ namespace EasyLightLevels
 
             _api.Input.SetHotKeyHandler("togglelightlevels", _ =>
             {
-                ToggleRun();
+                _painter.Toggle();
                 return true;
             });
         }
@@ -101,12 +102,7 @@ namespace EasyLightLevels
 
         private TextCommandResult AbortCommand(TextCommandCallingArgs args)
         {
-            if (!_isOn) return TextCommandResult.Success("Aborted ELL.");
-
-            ToggleRun();
-            if (_opThread.IsAlive) _opThread.Abort();
-            _api.World.HighlightBlocks(_api.World.Player, 5229, new List<BlockPos>());
-
+            _painter.Stop();
             return TextCommandResult.Success("Aborted ELL.");
         }
 
@@ -135,137 +131,11 @@ namespace EasyLightLevels
             return TextCommandResult.Success("Radius Saved as " + _config.Radius.Value + ".");
         }
 
-        private TextCommandResult Command(TextCommandCallingArgs callArgs)
+        private TextCommandResult ToggleCommand(TextCommandCallingArgs callArgs)
         {
-            ToggleRun();
+            _painter.Toggle();
             return TextCommandResult.Success(null);
         }
-
-        private void ToggleRun()
-        {
-            if (!_isOn)
-            {
-                _isOn = true;
-                _opThread = new Thread(Run)
-                {
-                    IsBackground = true,
-                    Name = "EasyLightLevelsOperator"
-                };
-                _opThread.Start();
-            }
-            else
-            {
-                _isOn = false;
-            }
-        }
-
-        private bool IsAir(int x, int y, int z)
-        {
-            return 0.Equals(_api.World.BlockAccessor.GetBlockId(new BlockPos(x, y, z)));
-        }
-
-        private bool IsSolid(int x, int y, int z)
-        {
-            var cb = _api.World.BlockAccessor.GetBlock(new BlockPos(x, y, z)).CollisionBoxes;
-            return !(cb == null || cb.Length == 0);
-        }
-
-        private int GetRadius()
-        {
-            return _config.AsSphere.Value ? _config.Radius.Value + 1 : _config.Radius.Value;
-        }
-
-        private void Run()
-        {
-            var posList = new List<BlockPos>();
-            var colorList = new List<int>();
-
-            while (_isOn)
-            {
-                Thread.Sleep(100);
-                try
-                {
-                    var rad = GetRadius();
-                    var player = _api.World.Player;
-                    var pPos = player.Entity.Pos.AsBlockPos;
-
-                    posList.Clear();
-                    colorList.Clear();
-
-                    var minX = pPos.X - rad;
-                    var maxX = pPos.X + rad;
-                    var minY = pPos.Y - rad;
-                    var maxY = pPos.Y + rad;
-                    var minZ = pPos.Z - rad;
-                    var maxZ = pPos.Z + rad;
-
-                    var asSphere = _config.AsSphere.Value;
-                    var radSquared = rad * rad;
-
-                    for (var x = minX; x <= maxX; x++)
-                    for (var y = minY; y <= maxY; y++)
-                    for (var z = minZ; z <= maxZ; z++)
-                    {
-                        if (IsAir(x, y, z)) continue;
-                        if (!IsSolid(x, y, z)) continue;
-
-                        if (asSphere)
-                        {
-                            var dx = x - pPos.X;
-                            var dy = y - pPos.Y;
-                            var dz = z - pPos.Z;
-                            if (dx * dx + dy * dy + dz * dz > radSquared) continue;
-                        }
-
-                        if (IsSolid(x, y + 1, z)) continue;
-
-                        var bPos = new BlockPos(x, y, z);
-                        posList.Add(bPos);
-                        colorList.Add(GetColor(bPos.UpCopy()));
-                    }
-
-                    _api.Event.EnqueueMainThreadTask(
-                        () => _api.World.HighlightBlocks(player, 5229, posList, colorList),
-                        "EasyLightLevels");
-                }
-                catch (ThreadAbortException)
-                {
-                    Thread.ResetAbort();
-                    break;
-                }
-                catch (Exception)
-                {
-                    //this is running a lot, so instead of errors stopping the game let's just cut our losses and do it later. worst case it won't update
-                }
-            }
-
-            _api.Event.EnqueueMainThreadTask(
-                () => _api.World.HighlightBlocks(_api.World.Player, 5229, new List<BlockPos>()),
-                "EasyLightLevels");
-        }
-
-        private int GetColor(BlockPos bPos)
-        {
-            var blockLightType = _api.World.BlockAccessor.GetLightLevel(bPos, EnumLightLevelType.OnlyBlockLight);
-            var sunLightType = _api.World.BlockAccessor.GetLightLevel(bPos, EnumLightLevelType.OnlySunLight);
-
-            var isColourAid = _config.ColorContrast.Value;
-
-            if (blockLightType >= 8 && sunLightType >= 8)
-                //no colour
-                return ColorUtil.ToRgba(0, 0, 0, 0);
-
-            if (blockLightType < 8 && sunLightType >= 8)
-                //cyan(colourAid) or yellow
-                return isColourAid ? ColorUtil.ToRgba(32, 255, 255, 0) : ColorUtil.ToRgba(32, 0, 255, 255);
-
-            if (blockLightType < 8 && sunLightType < 8)
-                //blue(colourAid) or red
-                return isColourAid ? ColorUtil.ToRgba(32, 255, 0, 0) : ColorUtil.ToRgba(32, 0, 0, 255);
-
-
-            // not reachable
-            return ColorUtil.ToRgba(0, 0, 0, 0);
-        }
+        
     }
 }
