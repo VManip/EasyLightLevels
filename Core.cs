@@ -50,6 +50,10 @@ namespace easylightlevels
                 .WithAlias("r")
                 .WithArgs(api.ChatCommands.Parsers.OptionalInt("radius", -1))
                 .HandleWith(RadiusCommand)
+                .EndSubCommand()
+                .BeginSubCommand("colorAid")
+                .WithAlias("ca")
+                .HandleWith(UpdateColorAid)
                 .EndSubCommand();
 
 
@@ -110,6 +114,13 @@ namespace easylightlevels
         {
             UpdateConfig();
             return TextCommandResult.Success("Updated ELL configuration from file.");
+        }
+
+        private TextCommandResult UpdateColorAid(TextCommandCallingArgs args)
+        {
+            _config.ColorContrast.Value = !_config.ColorContrast.Value;
+            _api.StoreModConfig(_config, ConfigFilename);
+            return TextCommandResult.Success("Set colour aid mode to " + _config.ColorContrast.Value);
         }
 
         private TextCommandResult RadiusCommand(TextCommandCallingArgs args)
@@ -228,17 +239,20 @@ namespace easylightlevels
             var blockLightType = _api.World.BlockAccessor.GetLightLevel(bPos, EnumLightLevelType.OnlyBlockLight);
             var sunLightType = _api.World.BlockAccessor.GetLightLevel(bPos, EnumLightLevelType.OnlySunLight);
 
+            var isColourAid = _config.ColorContrast.Value;
+
             if (blockLightType >= 8 && sunLightType >= 8)
                 //no colour
                 return ColorUtil.ToRgba(0, 0, 0, 0);
 
             if (blockLightType < 8 && sunLightType >= 8)
-                //yellow
-                return ColorUtil.ToRgba(32, 0, 255, 255);
+                //cyan(colourAid) or yellow
+
+                return isColourAid ? ColorUtil.ToRgba(32, 255, 255, 0) : ColorUtil.ToRgba(32, 0, 255, 255);
 
             if (blockLightType < 8 && sunLightType < 8)
-                //red
-                return ColorUtil.ToRgba(32, 0, 0, 255);
+                //blue(colourAid) or red
+                return isColourAid ? ColorUtil.ToRgba(32, 255, 0, 0) : ColorUtil.ToRgba(32, 0, 0, 255);
 
 
             // not reachable
