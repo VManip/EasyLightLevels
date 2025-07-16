@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Vintagestory.API.Common;
 
@@ -37,8 +36,8 @@ using Vintagestory.API.Common;
 
 [assembly: ModInfo("Easy Light Levels", "easylightlevels",
     Side = "Client",
-    Version = "1.0.3",
+    Version = "1.0.4",
     Description = "Adds a simple light level viewer to the game. Run .lightlvl in chat to toggle it.",
-    Authors = new[] { "Stinky Lizard" })]
+    Authors = new[] { "Stinky Lizard", "vmanip" })]
 
- [assembly: ModDependency("game")]
+[assembly: ModDependency("game")]
