@@ -1,24 +1,32 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using Vintagestory.API.Common;
 using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
 namespace easylightlevels
 {
-    class ELLCoreSystem : ModSystem
+    internal class EllCoreSystem : ModSystem
     {
-        public override bool ShouldLoad(EnumAppSide side) => side == EnumAppSide.Client;
+        private const string ConfigFilename = "EasyLightLevelsConfig.json";
+        private ICoreClientAPI _api;
+
+        private EllConfig _config;
+        private bool _isOn;
+
+        private Thread _opThread;
+
+        public override bool ShouldLoad(EnumAppSide side)
+        {
+            return side == EnumAppSide.Client;
+        }
 
         public override void StartClientSide(ICoreClientAPI api)
         {
-
             if (!ShouldLoad(api.Side)) return;
 
-            this.api = api;
+            _api = api;
 
             UpdateConfig();
 
@@ -26,77 +34,62 @@ namespace easylightlevels
                 .WithDescription("See light levels.")
                 .WithAlias("lightlevel")
                 .HandleWith(Command)
-
                 .BeginSubCommand("help")
-                    .WithAlias("h")
-                    .HandleWith(HelpCommand)
+                .WithAlias("h")
+                .HandleWith(HelpCommand)
                 .EndSubCommand()
-
                 .BeginSubCommand("abort")
-                    .WithAlias("a")
-                    .HandleWith(AbortCommand)
+                .WithAlias("a")
+                .HandleWith(AbortCommand)
                 .EndSubCommand()
-
                 .BeginSubCommand("update")
-                    .WithAlias("u")
-                    .HandleWith(UpdateCommand)
+                .WithAlias("u")
+                .HandleWith(UpdateCommand)
                 .EndSubCommand()
-
                 .BeginSubCommand("radius")
-                    .WithAlias("r")
-                    .WithArgs(api.ChatCommands.Parsers.OptionalInt("radius", -1))
-                    .HandleWith(x => RadiusCommand(x))
+                .WithAlias("r")
+                .WithArgs(api.ChatCommands.Parsers.OptionalInt("radius", -1))
+                .HandleWith(RadiusCommand)
                 .EndSubCommand();
-
         }
 
-        Thread opThread;
-        bool isOn;
-        ICoreClientAPI api;
-
-        ELLConfig config;
-        const string configFilename = "EasyLightLevelsConfig.json";
-        
-
         private void UpdateConfig()
-		{
+        {
             try
-			{
-                ELLConfig fromDisk = api.LoadModConfig<ELLConfig>(configFilename);
-                if (fromDisk == null)
-				{
-                    //no config file
-                    config = new ELLConfig();
-				}
-                else config = fromDisk;
-			}
+            {
+                var fromDisk = _api.LoadModConfig<EllConfig>(ConfigFilename);
+                _config = fromDisk ?? new EllConfig();
+            }
             catch (Exception)
-			{
-                api.Logger.Warning("Easy Light Levels Warning: Config file had errors, using default.");
-                config = new ELLConfig();
-			}
+            {
+                _api.Logger.Warning("Easy Light Levels Warning: Config file had errors, using default.");
+                _config = new EllConfig();
+            }
+
             //rewrite to config file to show defaults if ShowDefaults was changed
-            api.StoreModConfig(config, configFilename);
-		}
+            _api.StoreModConfig(_config, ConfigFilename);
+        }
 
         private TextCommandResult HelpCommand(TextCommandCallingArgs args)
         {
-            api.ShowChatMessage("ELL command help:");
-            api.ShowChatMessage("Use '.lightlvl' to toggle light levels on and off.");
-            api.ShowChatMessage("Use '.lightlvl update' to update the configuration file and load new changes to it into the game.");
-            api.ShowChatMessage("Use '.lightlvl radius' to show or set the radius.");
-            api.ShowChatMessage("If the light levels won't update or go away, try '.lightlvl abort'.");
+            _api.ShowChatMessage("ELL command help:");
+            _api.ShowChatMessage("Use '.lightlvl' to toggle light levels on and off.");
+            _api.ShowChatMessage(
+                "Use '.lightlvl update' to update the configuration file and load new changes to it into the game.");
+            _api.ShowChatMessage("Use '.lightlvl radius' to show or set the radius.");
+            _api.ShowChatMessage("If the light levels won't update or go away, try '.lightlvl abort'.");
             return TextCommandResult.Success(null);
         }
 
         private TextCommandResult AbortCommand(TextCommandCallingArgs args)
         {
-            if (isOn)
+            if (_isOn)
             {
                 ToggleRun();
-                if (opThread.IsAlive) opThread.Abort();
-                api.World.HighlightBlocks(api.World.Player, 5229, new List<BlockPos>());
+                if (_opThread.IsAlive) _opThread.Abort();
+                _api.World.HighlightBlocks(_api.World.Player, 5229, new List<BlockPos>());
             }
+
             return TextCommandResult.Success("Aborted ELL.");
         }
 
@@ -108,231 +101,135 @@ namespace easylightlevels
 
         private TextCommandResult RadiusCommand(TextCommandCallingArgs args)
         {
-            int rad = (int)args[0];
-            if (rad == -1) return TextCommandResult.Success("Current Radius: " + config.Radius.Value.ToString());
-            else if (rad < 1) return TextCommandResult.Error(rad + " is not a valid radius. It must be a number greater than 0.");
-            else
-            {
-                config.Radius.Value = rad;
-                api.StoreModConfig(config, configFilename);
-                return TextCommandResult.Success("Radius Saved as " + config.Radius.Value.ToString() + ".");
-            }
+            var rad = (int)args[0];
+            if (rad == -1) return TextCommandResult.Success("Current Radius: " + _config.Radius.Value);
+            if (rad < 1)
+                return TextCommandResult.Error(rad + " is not a valid radius. It must be a number greater than 0.");
+
+            _config.Radius.Value = rad;
+            _api.StoreModConfig(_config, ConfigFilename);
+            return TextCommandResult.Success("Radius Saved as " + _config.Radius.Value + ".");
         }
 
         private TextCommandResult Command(TextCommandCallingArgs callArgs)
-		{
+        {
             ToggleRun();
             return TextCommandResult.Success(null);
-		}
+        }
 
         private void ToggleRun()
         {
-            if (!isOn)
-			{
-                isOn = true;
-                opThread = new Thread(Run)
+            if (!_isOn)
+            {
+                _isOn = true;
+                _opThread = new Thread(Run)
                 {
                     IsBackground = true,
                     Name = "EasyLightLevelsOperator"
                 };
-                opThread.Start();
-			} 
-            else isOn = false;
+                _opThread.Start();
+            }
+            else
+            {
+                _isOn = false;
+            }
         }
 
-        private bool IsAir(int x, int y, int z) => api.World.BlockAccessor.GetBlock(x, y, z).Id == 0;
+        private bool IsAir(int x, int y, int z)
+        {
+            return 0.Equals(_api.World.BlockAccessor.GetBlockId(new BlockPos(x, y, z)));
+        }
 
         private bool IsSolid(int x, int y, int z)
-		{
-            Cuboidf[] cb = api.World.BlockAccessor.GetBlock(x, y, z).CollisionBoxes;
-            if (cb == null || cb.Length == 0) return false;
-            else return true;
+        {
+            var cb = _api.World.BlockAccessor.GetBlock(new BlockPos(x, y, z)).CollisionBoxes;
+            return !(cb == null || cb.Length == 0);
         }
 
-        private int GetRadius() => config.AsSphere.Value ? config.Radius.Value + 1 : config.Radius.Value;
+        private int GetRadius()
+        {
+            return _config.AsSphere.Value ? _config.Radius.Value + 1 : _config.Radius.Value;
+        }
 
         private void Run()
         {
-            while (isOn)
+            while (_isOn)
             {
                 Thread.Sleep(100);
                 try
                 {
-                    int rad = GetRadius();
+                    var rad = GetRadius();
 
-                    IClientPlayer player = api.World.Player;
+                    var player = _api.World.Player;
 
-                    BlockPos pPos = player.Entity.Pos.AsBlockPos;
+                    var pPos = player.Entity.Pos.AsBlockPos;
 
-                    List<BlockPos> posList = new List<BlockPos>();
-                    List<int> colorList = new List<int>();
+                    var posList = new List<BlockPos>();
+                    var colorList = new List<int>();
 
 
-                    for (int x = pPos.X - rad; x < pPos.X + rad + 1; x++)
-                    {
-                        for (int y = pPos.Y - rad; y < pPos.Y + rad + 1; y++)
+                    for (var x = pPos.X - rad; x < pPos.X + rad + 1; x++)
+                    for (var y = pPos.Y - rad; y < pPos.Y + rad + 1; y++)
+                    for (var z = pPos.Z - rad; z < pPos.Z + rad + 1; z++)
+                        if (!IsAir(x, y, z)) //is the block not air?
                         {
-                            for (int z = pPos.Z - rad; z < pPos.Z + rad + 1; z++)
+                            if (!IsSolid(x, y, z)) continue; // is the block solid?
+
+                            if (_config.AsSphere.Value)
                             {
-                                if (!IsAir(x, y, z)) //is the block not air?
-                                {
-                                    if (!IsSolid(x, y, z)) continue; // is the block solid?
-
-                                    if (config.AsSphere.Value)
-                                    {
-                                        int dx = x - pPos.X, dy = y - pPos.Y, dz = z - pPos.Z;
-                                        if ((dx * dx + dy * dy + dz * dz) > (rad * rad)) continue; //is the block in a sphere around us?
-                                    }
-
-                                    if (IsSolid(x, y + 1, z)) continue; //does the block have a free top?
-
-                                    //they can spawn on upper horizontal half slabs
-                                    //if (!IsFullBlock(x, y, z)) continue; //is the block a full block? creatures can't spawn on e.g. slabs
-
-                                    //if all are true, add it to be highlighted
-
-                                    BlockPos bPos = new BlockPos(x, y, z);
-
-                                    posList.Add(bPos);
-                                    colorList.Add(GetColor(bPos.UpCopy()));
-
-                                }
+                                int dx = x - pPos.X, dy = y - pPos.Y, dz = z - pPos.Z;
+                                if (dx * dx + dy * dy + dz * dz >
+                                    rad * rad) continue; //is the block in a sphere around us?
                             }
-                        }
-                    }
 
-                    api.Event.EnqueueMainThreadTask(new Action(() => api.World.HighlightBlocks(player, 5229, posList, colorList)), "EasyLightLevels");
+                            if (IsSolid(x, y + 1, z)) continue; //does the block have a free top?
+
+                            //they can spawn on upper horizontal half slabs
+                            //if (!IsFullBlock(x, y, z)) continue; //is the block a full block? creatures can't spawn on e.g. slabs
+                            //if all are true, add it to be highlighted
+                            var bPos = new BlockPos(x, y, z);
+
+                            posList.Add(bPos);
+                            colorList.Add(GetColor(bPos.UpCopy()));
+                        }
+
+                    _api.Event.EnqueueMainThreadTask(() => _api.World.HighlightBlocks(player, 5229, posList, colorList),
+                        "EasyLightLevels");
                 }
                 catch (ThreadAbortException)
-				{
+                {
                     Thread.ResetAbort();
                     break;
-				}
-                catch { } //this is running a lot, so instead of errors stopping the game let's just cut our losses and do it later. worst case it won't update
+                }
+                catch
+                {
+                } //this is running a lot, so instead of errors stopping the game let's just cut our losses and do it later. worst case it won't update
             }
-            api.Event.EnqueueMainThreadTask(new Action(() => api.World.HighlightBlocks(api.World.Player, 5229, new List<BlockPos>())), "EasyLightLevels");
+
+            _api.Event.EnqueueMainThreadTask(
+                () => _api.World.HighlightBlocks(_api.World.Player, 5229, new List<BlockPos>()), "EasyLightLevels");
         }
 
         private int GetColor(BlockPos bPos)
-		{
-            for (int i = 0; i < config.Rules.Value.Length; i++)
-			{
-                ELLConfig.Rule rule = config.Rules.Value[i];
+        {
+            var blockLightType = _api.World.BlockAccessor.GetLightLevel(bPos, EnumLightLevelType.OnlyBlockLight);
+            var sunLightType = _api.World.BlockAccessor.GetLightLevel(bPos, EnumLightLevelType.OnlySunLight);
+            
+            if (blockLightType >= 8 && sunLightType >= 8)
+                //no colour
+                return ColorUtil.ToRgba(0, 0, 0, 0);
 
-                bool matches = false;
+            if (blockLightType < 8 && sunLightType >= 8)
+                //yellow
+                return ColorUtil.ToRgba(32, 0, 255, 255);
 
-                EnumLightLevelType lightType;
+            if (blockLightType < 8 && sunLightType < 8)
+                //red
+                return ColorUtil.ToRgba(32, 0, 0, 255);
 
-                if (rule.LightType.Equals("Block", StringComparison.OrdinalIgnoreCase)) lightType = EnumLightLevelType.OnlyBlockLight;
-                else if (rule.LightType.Equals("Sun", StringComparison.OrdinalIgnoreCase)) lightType = EnumLightLevelType.OnlySunLight;
-                else throw new Exception("Easy Light Levels: Invalid rule! Light type of rule " + i + " is not 'Block' or 'Sun'!");
 
-                if (rule.OverOrUnder.Equals("Over", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (api.World.BlockAccessor.GetLightLevel(bPos, lightType) >= rule.LightLevel) matches = true;
-                }
-                else if (rule.OverOrUnder.Equals("Under", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (api.World.BlockAccessor.GetLightLevel(bPos, lightType) < rule.LightLevel) matches = true;
-                }
-                else throw new Exception("Easy Light Levels: Invalid rule! OverOrUnder of rule " + i + " is not 'Over' or 'Under'!");
-                
-                if (matches)
-				{
-                    return ColorUtil.ToRgba(
-                        rule.Opacity,
-                        rule.Blue,
-                        rule.Green,
-                        rule.Red
-                        );
-				}
-            }
-
+            // not reachable
             return ColorUtil.ToRgba(0, 0, 0, 0);
-
         }
-
     }
-
-    public class ELLConfig
-    {
-        public class ConfigItem<T>
-        {
-            public readonly string Description;
-
-            private T val;
-            public T Value
-            {
-                get => val != null ? val : Default;
-                set => val = (value != null) ? value : Default;
-            }
-
-            public bool ShowDefault;
-
-            private readonly T TrueDefault;
-            public T Default
-            {
-                get => ShowDefault ? TrueDefault : default;
-            }
-
-            public ConfigItem(T Default, string Description, bool ShowDefault = true)
-            {
-                TrueDefault = Default;
-                Value = Default;
-                this.Description = Description;
-                this.ShowDefault = ShowDefault;
-            }
-        }
-
-        public class Rule
-        {
-            public int Red;
-            public int Green;
-            public int Blue;
-            public int Opacity;
-
-            public string LightType;
-            public string OverOrUnder;
-            public int LightLevel;
-
-            public Rule(int red, int green, int blue, int opacity, string lightType, string overorunder, int level)
-            {
-                Red = red;
-                Green = green;
-                Blue = blue;
-                Opacity = opacity;
-                LightType = lightType;
-                LightLevel = level;
-                OverOrUnder = overorunder;
-            }
-        }
-
-        public ConfigItem<int> Radius = new ConfigItem<int>(15,
-            "Radius of the shown light levels in blocks, not including your own position. " +
-            "At high values, FPS is not impacted, but the light levels will not be updated smoothly."
-            );
-
-        public ConfigItem<bool> AsSphere = new ConfigItem<bool>(true,
-            "Whether to show light levels in a sphere or in a cube. " + 
-            "Set to true to show light levels in a sphere around you. " + 
-            "Set to false to show light levels in a cube around you." 
-            );
-
-        public ConfigItem<Rule[]> Rules = new ConfigItem<Rule[]>(
-            new Rule[] {
-                new Rule(0, 255, 0, 32, "Block", "Over", 8),
-                new Rule(255, 255, 0, 32, "Sun", "Over", 8),
-                new Rule(255, 0, 0, 32, "Sun", "Under", 8)
-            }
-            , "These are the rules used when highlighting blocks. " + 
-            "They are evaluated from top to bottom, meaning a higher rule will override a lower one. " +
-            "Red, Green, Blue, and Opacity are color values from 0 to 255. " +
-            "LightType is the type of the light you want to check against, 'Block' or 'Sun'. " +
-            "LightLevel is the level of light you want to check against. " +
-            "OverOrUnder is whether you want the highlight to be applied to blocks over this light level or below this light level. Set to 'Over' or 'Under'. " +
-            "Set ShowDefault to true and load the mod (or use '.lightlvl update') to show defaults. " + 
-            "If a block does not match any rules it will not be highlighted."
-            , false);
-
-	}
 }
