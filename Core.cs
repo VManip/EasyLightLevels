@@ -51,6 +51,19 @@ namespace easylightlevels
                 .WithArgs(api.ChatCommands.Parsers.OptionalInt("radius", -1))
                 .HandleWith(RadiusCommand)
                 .EndSubCommand();
+
+
+            _api.Input.RegisterHotKey(
+                "togglelightlevels", // Unique code
+                "Toggle Light Levels", // Friendly name
+                GlKeys.F7 // Default key
+            );
+
+            _api.Input.SetHotKeyHandler("togglelightlevels", _ =>
+            {
+                ToggleRun();
+                return true;
+            });
         }
 
         private void UpdateConfig()
@@ -214,7 +227,7 @@ namespace easylightlevels
         {
             var blockLightType = _api.World.BlockAccessor.GetLightLevel(bPos, EnumLightLevelType.OnlyBlockLight);
             var sunLightType = _api.World.BlockAccessor.GetLightLevel(bPos, EnumLightLevelType.OnlySunLight);
-            
+
             if (blockLightType >= 8 && sunLightType >= 8)
                 //no colour
                 return ColorUtil.ToRgba(0, 0, 0, 0);
