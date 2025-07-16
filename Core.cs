@@ -233,7 +233,7 @@ namespace easylightlevels
                     Thread.ResetAbort();
                     break;
                 }
-                catch (Exception ex)
+                catch
                 {
                 }
             }
@@ -256,6 +256,7 @@ namespace easylightlevels
 
             if (blockLightType < 8 && sunLightType >= 8)
                 //cyan(colourAid) or yellow
+
                 return isColourAid ? ColorUtil.ToRgba(32, 255, 255, 0) : ColorUtil.ToRgba(32, 0, 255, 255);
 
             if (blockLightType < 8 && sunLightType < 8)
