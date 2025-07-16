@@ -177,47 +177,58 @@ namespace easylightlevels
 
         private void Run()
         {
+            // Preallocate lists once and reuse inside the loop to reduce GC pressure
+            var posList = new List<BlockPos>();
+            var colorList = new List<int>();
+
             while (_isOn)
             {
                 Thread.Sleep(100);
                 try
                 {
                     var rad = GetRadius();
-
                     var player = _api.World.Player;
-
                     var pPos = player.Entity.Pos.AsBlockPos;
 
-                    var posList = new List<BlockPos>();
-                    var colorList = new List<int>();
+                    // Clear lists instead of re-instantiating
+                    posList.Clear();
+                    colorList.Clear();
 
+                    // Cache bounds to avoid recalculating inside loops
+                    var minX = pPos.X - rad;
+                    var maxX = pPos.X + rad;
+                    var minY = pPos.Y - rad;
+                    var maxY = pPos.Y + rad;
+                    var minZ = pPos.Z - rad;
+                    var maxZ = pPos.Z + rad;
 
-                    for (var x = pPos.X - rad; x < pPos.X + rad + 1; x++)
-                    for (var y = pPos.Y - rad; y < pPos.Y + rad + 1; y++)
-                    for (var z = pPos.Z - rad; z < pPos.Z + rad + 1; z++)
-                        if (!IsAir(x, y, z)) //is the block not air?
+                    var asSphere = _config.AsSphere.Value;
+                    var radSquared = rad * rad;
+
+                    for (var x = minX; x <= maxX; x++)
+                    for (var y = minY; y <= maxY; y++)
+                    for (var z = minZ; z <= maxZ; z++)
+                    {
+                        if (IsAir(x, y, z)) continue;
+                        if (!IsSolid(x, y, z)) continue;
+
+                        if (asSphere)
                         {
-                            if (!IsSolid(x, y, z)) continue; // is the block solid?
-
-                            if (_config.AsSphere.Value)
-                            {
-                                int dx = x - pPos.X, dy = y - pPos.Y, dz = z - pPos.Z;
-                                if (dx * dx + dy * dy + dz * dz >
-                                    rad * rad) continue; //is the block in a sphere around us?
-                            }
-
-                            if (IsSolid(x, y + 1, z)) continue; //does the block have a free top?
-
-                            //they can spawn on upper horizontal half slabs
-                            //if (!IsFullBlock(x, y, z)) continue; //is the block a full block? creatures can't spawn on e.g. slabs
-                            //if all are true, add it to be highlighted
-                            var bPos = new BlockPos(x, y, z);
-
-                            posList.Add(bPos);
-                            colorList.Add(GetColor(bPos.UpCopy()));
+                            var dx = x - pPos.X;
+                            var dy = y - pPos.Y;
+                            var dz = z - pPos.Z;
+                            if (dx * dx + dy * dy + dz * dz > radSquared) continue;
                         }
 
-                    _api.Event.EnqueueMainThreadTask(() => _api.World.HighlightBlocks(player, 5229, posList, colorList),
+                        if (IsSolid(x, y + 1, z)) continue;
+
+                        var bPos = new BlockPos(x, y, z);
+                        posList.Add(bPos);
+                        colorList.Add(GetColor(bPos.UpCopy()));
+                    }
+
+                    _api.Event.EnqueueMainThreadTask(
+                        () => _api.World.HighlightBlocks(player, 5229, posList, colorList),
                         "EasyLightLevels");
                 }
                 catch (ThreadAbortException)
@@ -225,13 +236,17 @@ namespace easylightlevels
                     Thread.ResetAbort();
                     break;
                 }
-                catch
+                catch (Exception ex)
                 {
-                } //this is running a lot, so instead of errors stopping the game let's just cut our losses and do it later. worst case it won't update
+                    // Ideally log the exception somewhere to diagnose issues
+                    // e.g. _api.Logger.Error("Exception in Run loop", ex);
+                }
             }
 
+            // Clear highlights on exit
             _api.Event.EnqueueMainThreadTask(
-                () => _api.World.HighlightBlocks(_api.World.Player, 5229, new List<BlockPos>()), "EasyLightLevels");
+                () => _api.World.HighlightBlocks(_api.World.Player, 5229, new List<BlockPos>()),
+                "EasyLightLevels");
         }
 
         private int GetColor(BlockPos bPos)
