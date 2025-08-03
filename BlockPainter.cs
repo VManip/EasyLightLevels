@@ -121,7 +121,7 @@ namespace EasyLightLevels
                 {
                     break;
                 }
-                catch (Exception)
+                catch
                 {
                     //this is running a lot, so instead of errors stopping the game let's just cut our losses and do it later. worst case it won't update
                 }

@@ -36,8 +36,8 @@ using Vintagestory.API.Common;
 
 [assembly: ModInfo("Easy Light Levels", "easylightlevels",
     Side = "Client",
-    Version = "1.0.4",
-    Description = "Adds a simple light level viewer to the game. Run .lightlvl in chat to toggle it.",
+    Version = "1.1.0",
+    Description = "Adds a simple light level viewer to the game. Press F7 to toggle it.",
     Authors = new[] { "Stinky Lizard", "VManip" })]
 
 [assembly: ModDependency("game")]
