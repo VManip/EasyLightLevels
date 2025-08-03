@@ -34,7 +34,7 @@ using Vintagestory.API.Common;
 // by using the '*' as shown below:
 [assembly: AssemblyVersion("1.0.*")]
 
-[assembly: ModInfo("Easy Light Levels", "easylightlevels",
+[assembly: ModInfo("Easy Light Levels", "easylightlevels2025",
     Side = "Client",
     Version = "1.1.0",
     Description = "Adds a simple light level viewer to the game. Press F7 to toggle it.",
